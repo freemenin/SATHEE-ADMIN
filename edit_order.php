@@ -1,7 +1,7 @@
 <?php
 require_once 'include/require_permission.php';
 requirePermission('ORDERS', 'edit');
-include('include/require_login.php');
+require_once 'include/csrf_helper.php';
 ?>
 <?php
 include('include/header.php');
@@ -32,6 +32,7 @@ $paymentModes = ['Cash','prepaid'];
   <h1 class="h3 mb-4">Edit Order #<?= htmlspecialchars($order['invoice_number']) ?></h1>
 
   <form method="post" action="update_order.php" id="orderEditForm">
+    <?= csrfTokenField() ?>
     <input type="hidden" name="order_id" value="<?= (int)$order_id ?>">
     <input type="hidden" name="customer_id" value="<?= (int)$order['customer_id'] ?>">
 

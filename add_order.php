@@ -2,7 +2,7 @@
 <?php
 require_once 'include/require_permission.php';
 requirePermission('ORDERS', 'add');
-include('include/require_login.php');
+require_once 'include/csrf_helper.php';
 include('include/header.php');
 ?>
 
@@ -153,6 +153,7 @@ $distributor_result = $distributor_stmt->get_result();
         </div>
 
         <form id="order-form" method="POST" action="save_order.php">
+            <?= csrfTokenField() ?>
 
             <!-- Customer Mobile Search -->
             <div class="card sa-card mb-4">

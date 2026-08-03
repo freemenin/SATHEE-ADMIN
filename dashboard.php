@@ -27,7 +27,8 @@ if ($isAdminDashboard) {
     $purchaseData = getPurchaseDashboardData();
     $adminData = getAdminDashboardData();
 } elseif ($departmentCode === 'SALES' && hasPermission('ORDERS', 'view')) {
-    $salesData = getSalesDashboardData();
+    // Non-admin sales users only see their own order numbers, not the whole company's.
+    $salesData = getSalesDashboardData((int)($_SESSION['user_id'] ?? 0));
 } elseif ($departmentCode === 'PRODUCTION' && (hasPermission('BATCHES', 'view') || hasPermission('PRODUCTS', 'view'))) {
     $productionData = getProductionDashboardData();
 } elseif ($departmentCode === 'PURCHASE' && hasPermission('RAW_MATERIALS', 'view')) {
@@ -99,7 +100,7 @@ function dashboardQuickLinks(array $shortcuts): void
     echo '<div class="d-flex flex-wrap gap-2">';
     foreach ($shortcuts as $page) {
         $icon = trim($page['icon_class'] ?? '') ?: 'bi bi-arrow-right-circle';
-        echo '<a class="btn btn-sm btn-outline-secondary" href="' . h($page['page_url'] ?? '#') . '">';
+        echo '<a class="btn btn-sm btn-primary" href="' . h($page['page_url'] ?? '#') . '">';
         echo '<i class="' . h($icon) . ' me-1"></i>' . h($page['page_name'] ?? 'Open') . '</a>';
     }
     echo '</div>';
@@ -198,8 +199,8 @@ include('include/header.php');
                                 <td><?= h($order['invoice_number'] ?? '-') ?></td>
                                 <td><?= h($order['customer_name'] ?? '-') ?></td>
                                 <td><?= h($order['order_date'] ?? '-') ?></td>
-                                <td><span class="badge text-bg-light border"><?= h($order['order_status'] ?? '-') ?></span></td>
-                                <td><?= h($order['delivery_status'] ?? '-') ?></td>
+                                <td><span class="badge text-bg-light border"><?= h($order['order_status'] ?: '-') ?></span></td>
+                                <td><?= h($order['delivery_status'] ?: '-') ?></td>
                                 <td><?= h($order['distributor_name'] ?? '-') ?></td>
                             </tr>
                         <?php endforeach; ?>

@@ -83,7 +83,7 @@ function dashboardOrderCreatedExpr(): string
     return dashboardDateColumnExpr('o', 'orders', ['created_at', 'order_created_at', 'created_on', 'order_date']) ?: dashboardOrderDateExpr();
 }
 
-function getSalesDashboardData(): array
+function getSalesDashboardData(?int $filterByUserId = null): array
 {
     if (!dashboardTableExists('orders')) {
         return [
@@ -102,6 +102,15 @@ function getSalesDashboardData(): array
     $monthStart = date('Y-m-01');
     $lastMonthStart = date('Y-m-01', strtotime('first day of last month'));
     $lastMonthSameDate = date('Y-m-d', strtotime('-1 month'));
+
+    // Scope every query to one user's own orders (e.g. a Sales-department
+    // user should only see their own numbers on the dashboard; only Admin
+    // gets the company-wide totals). Falls back to unfiltered if the
+    // orders.created_by column hasn't been migrated yet.
+    $scopeToUser = $filterByUserId !== null && dashboardColumnExists('orders', 'created_by');
+    $userFilterSql = $scopeToUser ? ' AND o.created_by = ?' : '';
+    $userFilterType = $scopeToUser ? 'i' : '';
+    $userFilterParam = $scopeToUser ? [$filterByUserId] : [];
 
     $newWhere = dashboardStatusCondition('o', 'orders', ['order_status', 'delivery_status'], ['New', 'Open']);
     $assignedWhere = dashboardColumnExists('orders', 'distributor_id')
@@ -135,11 +144,20 @@ function getSalesDashboardData(): array
             SUM(CASE WHEN $deliveredWhere THEN 1 ELSE 0 END) AS delivered_orders,
             SUM(CASE WHEN $readyWhere THEN 1 ELSE 0 END) AS ready_delivery_orders
         FROM orders o
-    ", 's', [$monthStart]);
+        WHERE 1=1 $userFilterSql
+    ", 's' . $userFilterType, array_merge([$monthStart], $userFilterParam));
 
     $row = $counts[0] ?? [];
-    $currentMonth = dashboardScalar("SELECT COUNT(*) FROM orders o WHERE DATE($dateExpr) >= ?", 's', [$monthStart]);
-    $lastMonthSame = dashboardScalar("SELECT COUNT(*) FROM orders o WHERE DATE($dateExpr) >= ? AND DATE($dateExpr) <= ?", 'ss', [$lastMonthStart, $lastMonthSameDate]);
+    $currentMonth = dashboardScalar(
+        "SELECT COUNT(*) FROM orders o WHERE DATE($dateExpr) >= ? $userFilterSql",
+        's' . $userFilterType,
+        array_merge([$monthStart], $userFilterParam)
+    );
+    $lastMonthSame = dashboardScalar(
+        "SELECT COUNT(*) FROM orders o WHERE DATE($dateExpr) >= ? AND DATE($dateExpr) <= ? $userFilterSql",
+        'ss' . $userFilterType,
+        array_merge([$lastMonthStart, $lastMonthSameDate], $userFilterParam)
+    );
     $growth = $lastMonthSame > 0 ? (($currentMonth - $lastMonthSame) / $lastMonthSame) * 100 : ($currentMonth > 0 ? 100 : 0);
 
     $repeatOrders = 0;
@@ -153,7 +171,8 @@ function getSalesDashboardData(): array
                 GROUP BY customer_id
                 HAVING COUNT(*) > 1
             )
-        ");
+            $userFilterSql
+        ", $userFilterType, $userFilterParam);
         $newCustomerOrders = dashboardScalar("
             SELECT COUNT(*) FROM orders o
             WHERE DATE($dateExpr) >= ?
@@ -163,25 +182,28 @@ function getSalesDashboardData(): array
                   GROUP BY customer_id
                   HAVING COUNT(*) = 1
               )
-        ", 's', [$monthStart]);
+              $userFilterSql
+        ", 's' . $userFilterType, array_merge([$monthStart], $userFilterParam));
     }
 
     $statusCol = dashboardFirstExistingColumn('orders', ['order_status', 'delivery_status', 'distributor_status']);
     $statusChart = $statusCol ? dashboardRows("
         SELECT COALESCE(NULLIF(TRIM(o.`$statusCol`), ''), 'Unknown') AS label, COUNT(*) AS total
         FROM orders o
+        WHERE 1=1 $userFilterSql
         GROUP BY COALESCE(NULLIF(TRIM(o.`$statusCol`), ''), 'Unknown')
         ORDER BY total DESC
         LIMIT 8
-    ") : [];
+    ", $userFilterType, $userFilterParam) : [];
 
     $dailyTrend = dashboardRows("
         SELECT DATE($dateExpr) AS label, COUNT(*) AS total
         FROM orders o
         WHERE DATE($dateExpr) >= DATE_SUB(CURDATE(), INTERVAL 29 DAY)
+        $userFilterSql
         GROUP BY DATE($dateExpr)
         ORDER BY label ASC
-    ");
+    ", $userFilterType, $userFilterParam);
 
     $customerJoin = dashboardTableExists('customers') && dashboardColumnExists('orders', 'customer_id')
         ? 'LEFT JOIN customers c ON c.customer_id = o.customer_id'
@@ -208,9 +230,10 @@ function getSalesDashboardData(): array
         FROM orders o
         $customerJoin
         $distributorJoin
+        WHERE 1=1 $userFilterSql
         ORDER BY o.order_id DESC
         LIMIT 10
-    ");
+    ", $userFilterType, $userFilterParam);
 
     return [
         'total_orders' => (int)($row['total_orders'] ?? 0),
