@@ -177,7 +177,7 @@ function getAllowedMenuPages(): array
           AND p.status = 'active'
           AND r.status = 'active'
         ORDER BY
-            p.menu_group ASC,
+            FIELD(p.menu_group, 'Sales', 'Distribution', 'Inventory', 'Production', 'Reports', 'Administration'),
             p.display_order ASC,
             p.page_name ASC
     ");
