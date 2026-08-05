@@ -49,4 +49,28 @@ function requirePermissionAjax(string $pageCode, string $action = 'view'): void
     }
 }
 
+/**
+ * Require at least one of several permissions for an AJAX/JSON endpoint.
+ * Useful when an endpoint is shared by multiple pages (e.g. a product
+ * lookup used by both the products page and the order pages) and access
+ * should be granted if the caller has permission on any one of them.
+ * @param array $checks List of [pageCode, action] pairs, e.g. [['PRODUCTS','view'], ['ORDERS','add']]
+ */
+function requirePermissionAjaxAny(array $checks): void
+{
+    foreach ($checks as [$pageCode, $action]) {
+        if (hasPermission($pageCode, $action)) {
+            return;
+        }
+    }
+
+    http_response_code(403);
+    header('Content-Type: application/json');
+    echo json_encode([
+        'success' => false,
+        'message' => 'You do not have permission to perform this action. Please contact your administrator.',
+    ]);
+    exit;
+}
+
 ?>

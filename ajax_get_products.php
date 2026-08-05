@@ -1,6 +1,10 @@
 <?php
 require_once 'include/require_permission.php';
-requirePermissionAjax('PRODUCTS', 'view');
+requirePermissionAjaxAny([
+    ['PRODUCTS', 'view'],
+    ['ORDERS', 'add'],
+    ['ORDERS', 'edit'],
+]);
 include('include/require_login.php');
 include('include/db.php'); // Database connection
 
